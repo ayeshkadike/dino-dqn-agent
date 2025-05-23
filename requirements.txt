@@ -1,6 +1,8 @@
-opencv-python
-pyautogui
-mss
-numpy
-torch
-Pillow 
+tensorflow>=2.15
+numpy>=1.26
+opencv-python>=4.9
+matplotlib>=3.8
+mss>=9.0
+pyautogui>=0.9
+pillow>=10.0
+selenium>=4.20

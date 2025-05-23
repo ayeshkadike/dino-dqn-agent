@@ -3,35 +3,36 @@
 A reinforcement learning agent trained using Deep Q-Networks (DQN) to play the Chrome Dino game using visual input, built with TensorFlow.
 
 ## Dependencies
+- Tensorflow
 - opencv-python
 - pyautogui
 - mss
 - numpy
-- torch
-- Pillow
-- Tensorflow
+- selenium
+- matplotlib
 
 ## How it works
-- The agent captures the game screen using `mss` and processes it with OpenCV.
-- Actions are sent to the game using `pyautogui` to simulate key presses.
-- The RL model (DQN) is implemented in PyTorch.
+- The game is launched in Chrome via Selenium (`https://chromedino.com`).
+- The agent captures the game screen using `mss` and preprocesses it with OpenCV.
+- Actions (jump/duck) are simulated using `pyautogui`.
+- A convolutional DQN model is trained using TensorFlow/Keras.
+- The agent uses experience replay, a target network, epsilon-greedy exploration, and evaluation checkpoints.
 
 ## Usage
 1. Install dependencies: `pip install -r requirements.txt`
-2. Run the main script: `python main.py`
+2. Run the training script: `python train_dqn.py`
+
+The script will:
+
+- Launch Chrome Dino in a visible window
+- Begin training for the configured number of episodes
+- Save a checkpoint every 50 episodes (checkpoints/dqn_episode_XX.h5)
+- Resume automatically if rerun after interruption
+- Show reward and loss plots when training finishes
+
+You can customize hyper-parameters at the top of train_dqn.py.
 
 ---
 
 **Note:** Make sure the Chrome Dino game is open and the game window is in a fixed position for consistent screen capture. 
 
-## Project Structure
-```
-dino-rl/
-│
-├── main.py            # Main script to run the agent
-├── dino_env.py        # Environment wrapper for the Dino game
-├── model.py           # RL model (e.g., DQN)
-├── utils.py           # Utility functions (screen capture, preprocessing, etc.)
-├── requirements.txt   # Dependencies
-└── README.md
-``` 
