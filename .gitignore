@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.swp
+*.bak
+*.tmp
+*.log
+
+# Jupyter / IPython
+.ipynb_checkpoints/
+
+# Environment
+env/
+venv/
+ENV/
+.venv/
+.Python
+pip-log.txt
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# System Files
+.DS_Store
+Thumbs.db
+
+# Checkpoints / Output
+checkpoints/
+*.h5
+*.ckpt
+*.tflite
+
+# TensorBoard logs
+logs/
+events.out.*
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# Test cache
+.pytest_cache/
+
+# mss screenshots (if used for debug)
+*.png
