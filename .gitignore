@@ -17,6 +17,7 @@ venv/
 ENV/
 .venv/
 .Python
+checkpoints/
 pip-log.txt
 
 # VS Code
