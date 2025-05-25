@@ -7,7 +7,7 @@ from replay_buffer import ReplayBuffer
 from model import build_dqn_model
 from DQNAgent import DQNAgent
 
-# Create a directory for saved models
+# directory for saved models
 os.makedirs("checkpoints", exist_ok=True)
 
 # Hyperparameters
@@ -22,7 +22,6 @@ target_sync_steps = 1000
 global_step = 0
 gamma = 0.99
 lr = 1e-4
-# target_update_freq = 5
 
 # Load latest checkpoint if available
 def load_latest_checkpoint(model, target_model):
@@ -45,7 +44,6 @@ def load_latest_checkpoint(model, target_model):
 
     return latest_episode
 
-# Initialize environment, models, agent
 env = DinoEnv()
 buffer = ReplayBuffer(max_size=50000, input_shape=(84, 84, 1))
 model = build_dqn_model(input_shape=(84, 84, 1), num_actions=3)
@@ -53,10 +51,8 @@ target_model = build_dqn_model(input_shape=(84, 84, 1), num_actions=3)
 target_model.set_weights(model.get_weights())
 agent = DQNAgent(model, target_model, num_actions=3, gamma=gamma, lr=lr)
 
-# Resume from last checkpoint
 start_episode = load_latest_checkpoint(model, target_model)
 
-# Metrics
 episode_rewards = []
 episode_losses = []
 eval_scores = []
@@ -74,7 +70,8 @@ for episode in range(start_episode + 1, num_episodes + 1):
         # ε-greedy decision only on frames we actually step
         if global_step % frame_skip == 0:
             action = agent.select_action(state, epsilon)
-        # else repeat last_action
+            
+        # else we repeat the last_action
         next_state, reward, done, _ = env.step(action)
 
         # buffer & bookkeeping
@@ -84,7 +81,7 @@ for episode in range(start_episode + 1, num_episodes + 1):
         step        += 1
         global_step += 1
 
-        # ----- train only after warm-up ---------------------------------
+        # ----------------------train only after warm-up ---------------------------------
         if buffer.size() >= buffer_warmup:
             states, actions, rewards, next_states, dones = buffer.sample_batch(batch_size)
             loss = agent.train(states, actions, rewards, next_states, dones)
@@ -105,7 +102,7 @@ for episode in range(start_episode + 1, num_episodes + 1):
     print(f"Ep {episode:03d} | Reward: {total_reward:.0f} | Steps: {step} | "
           f"Epsilon: {epsilon:.3f} | Avg Loss: {avg_loss:.5f}")
 
-    # Evaluation run
+    # Eval run
     if episode % 20 == 0:
         eval_state = env.reset()
         eval_done = False

@@ -20,14 +20,14 @@ class DQNAgent:
         return np.argmax(q_values[0])  # Best action (exploit)
         
     def train(self, states, actions, rewards, next_states, dones):
-        # Compute target Q-values using target network
+
         target_q = self.target_model.predict(next_states, verbose=0)
         max_q_next = np.max(target_q, axis=1)
         target_values = rewards + (1 - dones) * self.gamma * max_q_next
 
         with tf.GradientTape() as tape:
             q_values = self.model(states, training=True)
-            # Gather predicted Q-values for the actions taken
+
             indices = np.arange(q_values.shape[0])
             selected_q = tf.gather(q_values, actions[:, None], batch_dims=1)
             loss = self.loss_fn(target_values, selected_q[:, 0])

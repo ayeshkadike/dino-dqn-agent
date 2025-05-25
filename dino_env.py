@@ -18,13 +18,13 @@ class DinoEnv:
         self.driver.get("https://chromedino.com/")
         time.sleep(2)
 
-        # Disable page scrolling just in case
+        # Disabled page scrolling which was causing issues
         self.driver.execute_script("document.body.style.overflow='hidden'")
 
         # Start game
         body = self.driver.find_element("tag name", "body")
         body.send_keys(Keys.SPACE)
-        self.body = body          # keep for later
+        self.body = body
 
     def reset(self):
         self.body.send_keys(Keys.SPACE)
