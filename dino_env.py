@@ -1,46 +1,49 @@
 import numpy as np
-import cv2
-import mss
-import pyautogui
-import time
-import random
+import cv2, mss, time
+import random # for testing
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.keys import Keys
 
 class DinoEnv:
     def __init__(self, monitor=None):
-        self.monitor = monitor or {"top": 250, "left": 125, "width": 700, "height": 150}
+        self.monitor = monitor or {"top": 235, "left": 600, "width": 700, "height": 165}
+
         self.sct = mss.mss()
 
-        # Setup Chrome (not headless)
-        options = Options()
-        options.add_argument("start-maximized")
-        self.driver = webdriver.Chrome(options=options)
+        # Launch Chrome
+        opts = Options()
+        opts.add_argument("start-maximized")
+        self.driver = webdriver.Chrome(options=opts)
         self.driver.get("https://chromedino.com/")
         time.sleep(2)
 
-        # Start the game
-        self.driver.find_element("tag name", "body").send_keys(Keys.SPACE)
-        time.sleep(1)
+        # Disable page scrolling just in case
+        self.driver.execute_script("document.body.style.overflow='hidden'")
+
+        # Start game
+        body = self.driver.find_element("tag name", "body")
+        body.send_keys(Keys.SPACE)
+        self.body = body          # keep for later
 
     def reset(self):
-        self.driver.find_element("tag name", "body").send_keys(Keys.SPACE)
+        self.body.send_keys(Keys.SPACE)
         time.sleep(0.2)
         obs, _ = self._get_observation()
         return obs
 
-    def step(self, action):
+    def step(self, action: int):
+        # 0 = noop, 1 = jump, 2 = duck
         if action == 1:
-            pyautogui.press("space")
+            self.body.send_keys(Keys.SPACE)
         elif action == 2:
-            pyautogui.keyDown("down")
-            time.sleep(0.1)
-            pyautogui.keyUp("down")
-        time.sleep(0.05)
+            # Arrow-Down only while game is running
+            if not self._is_game_over():
+                self.body.send_keys(Keys.ARROW_DOWN)
 
+        time.sleep(0.05)
         obs, _ = self._get_observation()
-        done = self._is_game_over()
+        done  = self._is_game_over()
         reward = 1.0 if not done else 0.0
         return obs, reward, done, {}
 
@@ -59,12 +62,13 @@ class DinoEnv:
 
 # --- Run Test ---
 if __name__ == "__main__":
-    monitor = {"top": 225, "left": 600, "width": 700, "height": 165}
+    
+    monitor = {"top": 235, "left": 600, "width": 700, "height": 165}
     env = DinoEnv(monitor=monitor)
 
     obs = env.reset()
     print("Environment reset. Initial observation shape:", obs.shape)
-
+    
     step = 0
     while True:
         action = random.choice([0, 1, 2])
