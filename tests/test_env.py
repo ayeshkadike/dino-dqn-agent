@@ -5,7 +5,7 @@ import numpy as np
 import mss
 from dino_env import DinoEnv
 
-monitor = {"top": 250, "left": 125, "width": 700, "height": 150}  # Example: right half of 1920x1080
+monitor = {"top": 235, "left": 600, "width": 700, "height": 165}
 
 # --- Step 2: Environment Test ---
 env = DinoEnv(monitor=monitor)

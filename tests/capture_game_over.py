@@ -4,7 +4,7 @@ import cv2
 
 with mss.mss() as sct:
     print("Available monitors:", sct.monitors)
-    monitor = {"top": 225, "left": 600, "width": 700, "height": 165}
+    monitor = {"top": 235, "left": 600, "width": 700, "height": 165}
 
     while True:
         # Capture full screen for context (primary monitor)
