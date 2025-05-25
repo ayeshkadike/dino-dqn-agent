@@ -11,14 +11,18 @@ from DQNAgent import DQNAgent
 os.makedirs("checkpoints", exist_ok=True)
 
 # Hyperparameters
-num_episodes = 10
-batch_size = 32
+num_episodes = 800
+batch_size = 64
 epsilon = 1.0
 epsilon_min = 0.1
-epsilon_decay = 0.995
+epsilon_decay = 0.992
+buffer_warmup     = 5000
+frame_skip = 4
+target_sync_steps = 1000
+global_step = 0
 gamma = 0.99
 lr = 1e-4
-target_update_freq = 5
+# target_update_freq = 5
 
 # Load latest checkpoint if available
 def load_latest_checkpoint(model, target_model):
@@ -66,20 +70,28 @@ for episode in range(start_episode + 1, num_episodes + 1):
     done = False
 
     while not done:
-        action = agent.select_action(state, epsilon)
+
+        # ε-greedy decision only on frames we actually step
+        if global_step % frame_skip == 0:
+            action = agent.select_action(state, epsilon)
+        # else repeat last_action
         next_state, reward, done, _ = env.step(action)
 
+        # buffer & bookkeeping
         buffer.store(state, action, reward, next_state, done)
         state = next_state
         total_reward += reward
-        step += 1
+        step        += 1
+        global_step += 1
 
-        if buffer.size() > batch_size:
+        # ----- train only after warm-up ---------------------------------
+        if buffer.size() >= buffer_warmup:
             states, actions, rewards, next_states, dones = buffer.sample_batch(batch_size)
             loss = agent.train(states, actions, rewards, next_states, dones)
             total_loss += loss
 
-        if episode % target_update_freq == 0 and step == 1:
+        # ----- hard-update target net every N env steps -----------------
+        if global_step % target_sync_steps == 0:
             agent.update_target_model()
 
     if epsilon > epsilon_min:
@@ -87,7 +99,7 @@ for episode in range(start_episode + 1, num_episodes + 1):
         epsilon = max(epsilon, epsilon_min)
 
     episode_rewards.append(total_reward)
-    avg_loss = total_loss / step if step > 0 else 0
+    avg_loss = total_loss / step if (step & total_loss) else 0
     episode_losses.append(avg_loss)
 
     print(f"Ep {episode:03d} | Reward: {total_reward:.0f} | Steps: {step} | "
