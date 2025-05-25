@@ -17,7 +17,6 @@ venv/
 ENV/
 .venv/
 .Python
-checkpoints/
 pip-log.txt
 
 # VS Code
@@ -46,5 +45,3 @@ dist/
 # Test cache
 .pytest_cache/
 
-# mss screenshots (if used for debug)
-*.png
