@@ -96,7 +96,7 @@ for episode in range(start_episode + 1, num_episodes + 1):
         epsilon = max(epsilon, epsilon_min)
 
     episode_rewards.append(total_reward)
-    avg_loss = total_loss / step if (step & total_loss) else 0
+    avg_loss = total_loss / step if (step and total_loss) else 0
     episode_losses.append(avg_loss)
 
     print(f"Ep {episode:03d} | Reward: {total_reward:.0f} | Steps: {step} | "
