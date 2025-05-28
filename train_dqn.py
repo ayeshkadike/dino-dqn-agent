@@ -11,12 +11,12 @@ from DQNAgent import DQNAgent
 os.makedirs("checkpoints", exist_ok=True)
 
 # Hyperparameters
-num_episodes = 800
+num_episodes = 2000
 batch_size = 64
 epsilon = 1.0
 epsilon_min = 0.1
 epsilon_decay = 0.992
-buffer_warmup     = 5000
+buffer_warmup     = 500
 frame_skip = 4
 target_sync_steps = 1000
 global_step = 0
