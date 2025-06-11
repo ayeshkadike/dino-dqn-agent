@@ -3,13 +3,13 @@
 import tensorflow as tf
 from tensorflow.keras import layers, models
 
-def build_dqn_model(input_shape=(84,84,1), num_actions = 3):
+def build_dqn_model(input_shape=(84,84,4), num_actions = 3):
     
     """
     Builds a Deep Q-Network model.
 
     Args:
-        input_shape: Shape of the observation (e.g., (84, 84, 1))
+        input_shape: Shape of the observation (e.g., (84, 84, 4))
         num_actions: Number of possible actions
 
     Returns:
