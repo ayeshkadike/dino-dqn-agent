@@ -2,19 +2,33 @@ import numpy as np
 import os
 import re
 import pickle
+import tensorflow as tf
 import matplotlib.pyplot as plt
 from dino_env import DinoEnv
 from replay_buffer import ReplayBuffer
 from model import build_dqn_model
 from DQNAgent import DQNAgent
 
+# Check for GPU availability
+gpus = tf.config.list_physical_devices('GPU')
+if gpus:
+    print(f"[✔] GPU detected: {gpus[0].name}")
+    try:
+        tf.config.experimental.set_memory_growth(gpus[0], True)
+    except RuntimeError as e:
+        print(f"[!] GPU setup error: {e}")
+else:
+    print("[✘] No GPU detected. Training will use CPU.")
+
+
+
 # directory for saved models
 os.makedirs("checkpoints", exist_ok=True)
 
 # Hyperparameters
-num_episodes = 10000
+num_episodes = 6100
 batch_size = 64
-epsilon = 1.0
+epsilon = 0.0
 epsilon_min = 0.1
 epsilon_decay = 0.992
 buffer_warmup     = 500
@@ -105,7 +119,11 @@ for episode in range(start_episode + 1, num_episodes + 1):
         # ----------------------train only after warm-up ---------------------------------
         if buffer.size() >= buffer_warmup:
             states, actions, rewards, next_states, dones = buffer.sample_batch(batch_size)
-            loss = agent.train(states, actions, rewards, next_states, dones)
+            
+            # GPU/CPU context for training
+            with tf.device('/GPU:0' if tf.config.list_physical_devices('GPU') else '/CPU:0'):
+                loss = agent.train(states, actions, rewards, next_states, dones)
+
             total_loss += loss
 
         # ----- hard-update target net every N env steps -----------------
