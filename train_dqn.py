@@ -1,6 +1,7 @@
 import numpy as np
 import os
 import re
+import pickle
 import matplotlib.pyplot as plt
 from dino_env import DinoEnv
 from replay_buffer import ReplayBuffer
@@ -11,7 +12,7 @@ from DQNAgent import DQNAgent
 os.makedirs("checkpoints", exist_ok=True)
 
 # Hyperparameters
-num_episodes = 2000
+num_episodes = 10000
 batch_size = 64
 epsilon = 1.0
 epsilon_min = 0.1
@@ -45,13 +46,33 @@ def load_latest_checkpoint(model, target_model):
     return latest_episode
 
 env = DinoEnv()
-buffer = ReplayBuffer(max_size=50000, input_shape=(84, 84, 1))
-model = build_dqn_model(input_shape=(84, 84, 1), num_actions=3)
-target_model = build_dqn_model(input_shape=(84, 84, 1), num_actions=3)
+buffer = ReplayBuffer(max_size=50000, input_shape=(84, 84, 4))
+model = build_dqn_model(input_shape=(84, 84, 4), num_actions=3)
+target_model = build_dqn_model(input_shape=(84, 84, 4), num_actions=3)
 target_model.set_weights(model.get_weights())
 agent = DQNAgent(model, target_model, num_actions=3, gamma=gamma, lr=lr)
 
 start_episode = load_latest_checkpoint(model, target_model)
+
+# Load or warm up replay buffer
+if os.path.exists("checkpoints/replay_buffer.pkl"):
+    print(f"[✔] Loading replay buffer from checkpoints/replay_buffer.pkl")
+    with open("checkpoints/replay_buffer.pkl", "rb") as f:
+        buffer = pickle.load(f)
+else:
+    print("[•] Warming up replay buffer using trained model...")
+    while buffer.size() < buffer_warmup:
+        state = env.reset()
+        done = False
+        while not done and buffer.size() < buffer_warmup:
+            action = agent.select_action(state, epsilon=0.2)
+            next_state, reward, done, _ = env.step(action)
+            buffer.store(state, action, reward, next_state, done)
+            state = next_state
+    with open("checkpoints/replay_buffer.pkl", "wb") as f:
+        pickle.dump(buffer, f)
+    print(f"[✔] Saved warmed-up buffer to checkpoints/replay_buffer.pkl")
+
 
 episode_rewards = []
 episode_losses = []
@@ -107,6 +128,7 @@ for episode in range(start_episode + 1, num_episodes + 1):
         eval_state = env.reset()
         eval_done = False
         eval_score = 0
+        action = 0
         while not eval_done:
             action = agent.select_action(eval_state, epsilon=0)
             eval_state, reward, eval_done, _ = env.step(action)
@@ -115,7 +137,7 @@ for episode in range(start_episode + 1, num_episodes + 1):
         print(f"[Eval] Episode {episode}: Score = {eval_score}")
 
     # Save model
-    if episode % 50 == 0:
+    if episode % 100 == 0:
         model.save(f"checkpoints/dqn_episode_{episode}.h5")
         print(f"Model saved at episode {episode}")
 
