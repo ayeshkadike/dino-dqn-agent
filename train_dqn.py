@@ -1,15 +1,18 @@
+# ---------- Standard libs ----------
+import os, re, pickle, random
+from pathlib import Path
+# ---------- Third-party ----------
 import numpy as np
-import os
-import re
-import pickle
-import tensorflow as tf
 import matplotlib.pyplot as plt
-from dino_env import DinoEnv
+import tensorflow as tf
+# ---------- Local modules ----------
+from dino_env      import DinoEnv, RuleBasedAgent
 from replay_buffer import ReplayBuffer
-from model import build_dqn_model
-from DQNAgent import DQNAgent
+from model         import build_dqn_model          # dueling DQN
+from DQNAgent      import DQNAgent                # double-DQN + Huber
 
-# Check for GPU availability
+# ───────────────────────────────────────────────────────────────────────────────
+# GPU setup
 gpus = tf.config.list_physical_devices('GPU')
 if gpus:
     print(f"[✔] GPU detected: {gpus[0].name}")
@@ -18,157 +21,156 @@ if gpus:
     except RuntimeError as e:
         print(f"[!] GPU setup error: {e}")
 else:
-    print("[✘] No GPU detected. Training will use CPU.")
+    print("[✘] No GPU detected → using CPU")
 
+device = '/GPU:0' if gpus else '/CPU:0'
+Path("checkpoints").mkdir(exist_ok=True)
 
+# ───────────────────────────────────────────────────────────────────────────────
+# Hyper-parameters
+num_episodes      = 23000
+batch_size        = 64
+buffer_warmup     = 3_000         # expert steps before any training
+frame_skip        = 2
+target_sync_steps = 1_000
+gamma             = 0.99
+lr                = 1e-4
 
-# directory for saved models
-os.makedirs("checkpoints", exist_ok=True)
+# expert-mix schedule
+expert_prob_start   = 0.30        # 30 %
+expert_prob_final   = 0.00
+expert_decay_eps    = 2_000       # linear decay for first 2 000 eps
 
-# Hyperparameters
-num_episodes = 6100
-batch_size = 64
-epsilon = 0.0
-epsilon_min = 0.1
-epsilon_decay = 0.992
-buffer_warmup     = 500
-frame_skip = 4
-target_sync_steps = 1000
-global_step = 0
-gamma = 0.99
-lr = 1e-4
+# tiny exploration for DQN when expert not used
+dqn_epsilon = 0.05
 
-# Load latest checkpoint if available
-def load_latest_checkpoint(model, target_model):
-    latest_episode = 0
-    latest_file = None
+# ───────────────────────────────────────────────────────────────────────────────
+# Utility: latest checkpoint loader
+def load_latest_ckpt(model, target):
+    latest_ep = 0
+    for f in os.listdir("checkpoints"):
+        m = re.match(r"dqn_episode_(\d+)\.h5", f)
+        if m:
+            ep = int(m.group(1))
+            if ep > latest_ep:
+                latest_ep, latest_file = ep, f
+    if latest_ep:
+        model.load_weights(f"checkpoints/{latest_file}")
+        target.load_weights(f"checkpoints/{latest_file}")
+        print(f"[✔] Resumed from {latest_file}")
+    return latest_ep
 
-    for filename in os.listdir("checkpoints"):
-        match = re.match(r"dqn_episode_(\d+)\.h5", filename)
-        if match:
-            episode_num = int(match.group(1))
-            if episode_num > latest_episode:
-                latest_episode = episode_num
-                latest_file = filename
+# ───────────────────────────────────────────────────────────────────────────────
+# Environment + models
+env         = DinoEnv()
+expert      = RuleBasedAgent(env.driver)
+buffer      = ReplayBuffer(max_size=50_000, input_shape=(84,84,4))
 
-    if latest_file:
-        path = os.path.join("checkpoints", latest_file)
-        print(f"[✔] Resuming from checkpoint: {path}")
-        model.load_weights(path)
-        target_model.load_weights(path)
+model       = build_dqn_model(input_shape=(84,84,4), num_actions=3)
+model.compile(optimizer=tf.keras.optimizers.Adam(lr, clipnorm=1.0),
+              loss=tf.keras.losses.Huber())
 
-    return latest_episode
+target      = build_dqn_model(input_shape=(84,84,4), num_actions=3)
+target.set_weights(model.get_weights())
 
-env = DinoEnv()
-buffer = ReplayBuffer(max_size=50000, input_shape=(84, 84, 4))
-model = build_dqn_model(input_shape=(84, 84, 4), num_actions=3)
-target_model = build_dqn_model(input_shape=(84, 84, 4), num_actions=3)
-target_model.set_weights(model.get_weights())
-agent = DQNAgent(model, target_model, num_actions=3, gamma=gamma, lr=lr)
+agent       = DQNAgent(model, target, num_actions=3, gamma=gamma, lr=lr)
+start_ep    = load_latest_ckpt(model, target)
 
-start_episode = load_latest_checkpoint(model, target_model)
-
-# Load or warm up replay buffer
-if os.path.exists("checkpoints/replay_buffer.pkl"):
-    print(f"[✔] Loading replay buffer from checkpoints/replay_buffer.pkl")
+# ───────────────────────────────────────────────────────────────────────────────
+# Buffer warm-up with 100 % expert
+if Path("checkpoints/replay_buffer.pkl").exists():
     with open("checkpoints/replay_buffer.pkl", "rb") as f:
         buffer = pickle.load(f)
+    print("[✔] Replay buffer loaded")
 else:
-    print("[•] Warming up replay buffer using trained model...")
+    print("[•] Warm-up: collecting expert transitions …")
     while buffer.size() < buffer_warmup:
-        state = env.reset()
-        done = False
+        s = env.reset(); done = False
         while not done and buffer.size() < buffer_warmup:
-            action = agent.select_action(state, epsilon=0.2)
-            next_state, reward, done, _ = env.step(action)
-            buffer.store(state, action, reward, next_state, done)
-            state = next_state
-    with open("checkpoints/replay_buffer.pkl", "wb") as f:
-        pickle.dump(buffer, f)
-    print(f"[✔] Saved warmed-up buffer to checkpoints/replay_buffer.pkl")
+            a = expert.select_action()
+            s2,r,done,_ = env.step(a)
+            buffer.store(s,a,r,s2,done)
+            s = s2
+    with open("checkpoints/replay_buffer.pkl","wb") as f:
+        pickle.dump(buffer,f)
+    print(f"[✔] Warm-up complete ({buffer.size()} steps)")
 
-
-episode_rewards = []
-episode_losses = []
-eval_scores = []
-
+# ───────────────────────────────────────────────────────────────────────────────
 # Training loop
-for episode in range(start_episode + 1, num_episodes + 1):
-    state = env.reset()
-    total_reward = 0
-    total_loss = 0
-    step = 0
-    done = False
+episode_rewards, episode_losses, eval_scores = [], [], []
+global_step = 0
+
+for ep in range(start_ep+1, num_episodes+1):
+
+    # linear expert-prob decay
+    expert_prob = max(
+        expert_prob_final,
+        expert_prob_start * (1 - min(ep-1, expert_decay_eps)/expert_decay_eps)
+    )
+
+    s = env.reset(); done=False
+    tot_reward = tot_loss = steps = 0
 
     while not done:
+        # choose actor
+        if random.random() < expert_prob:
+            a = expert.select_action()
+        else:
+            a = agent.select_action(s, dqn_epsilon)
 
-        # ε-greedy decision only on frames we actually step
-        if global_step % frame_skip == 0:
-            action = agent.select_action(state, epsilon)
-            
-        # else we repeat the last_action
-        next_state, reward, done, _ = env.step(action)
+        # frame-skip logic: repeat last a for skipped frames
+        if global_step % frame_skip != 0:
+            a = prev_a
+        prev_a = a
 
-        # buffer & bookkeeping
-        buffer.store(state, action, reward, next_state, done)
-        state = next_state
-        total_reward += reward
-        step        += 1
-        global_step += 1
+        s2,r,done,_ = env.step(a)
+        buffer.store(s,a,r,s2,done)
+        s = s2
 
-        # ----------------------train only after warm-up ---------------------------------
+        tot_reward += r
+        steps      += 1
+        global_step+= 1
+
+        # training
         if buffer.size() >= buffer_warmup:
-            states, actions, rewards, next_states, dones = buffer.sample_batch(batch_size)
-            
-            # GPU/CPU context for training
-            with tf.device('/GPU:0' if tf.config.list_physical_devices('GPU') else '/CPU:0'):
-                loss = agent.train(states, actions, rewards, next_states, dones)
+            states, actions, rewards, nxt_states, dones = buffer.sample_batch(batch_size)
+            with tf.device(device):
+                loss = agent.train(states, actions, rewards, nxt_states, dones)
+            tot_loss += loss
 
-            total_loss += loss
-
-        # ----- hard-update target net every N env steps -----------------
         if global_step % target_sync_steps == 0:
             agent.update_target_model()
 
-    if epsilon > epsilon_min:
-        epsilon *= epsilon_decay
-        epsilon = max(epsilon, epsilon_min)
+    episode_rewards.append(tot_reward)
+    episode_losses.append(tot_loss/steps if steps else 0)
+    print(f"Ep {ep:04d} | Rwd {tot_reward:.1f} | Steps {steps} | "
+          f"ExpProb {expert_prob:.2f} | Loss {tot_loss:.3f}")
 
-    episode_rewards.append(total_reward)
-    avg_loss = total_loss / step if (step and total_loss) else 0
-    episode_losses.append(avg_loss)
+    # evaluation every 20 eps
+    if ep % 20 == 0:
+        es = 0; st = env.reset(); d=False
+        while not d:
+            a = agent.select_action(st, epsilon=0)
+            st, rw, d,_ = env.step(a)
+            es += rw
+        eval_scores.append((ep, es))
+        print(f"[Eval] Ep {ep}: score {es:.1f}")
 
-    print(f"Ep {episode:03d} | Reward: {total_reward:.0f} | Steps: {step} | "
-          f"Epsilon: {epsilon:.3f} | Avg Loss: {avg_loss:.5f}")
+    # save model + buffer every 100 eps
+    if ep % 100 == 0:
+        model.save(f"checkpoints/dqn_episode_{ep}.h5")
+        with open("checkpoints/replay_buffer.pkl","wb") as f:
+            pickle.dump(buffer,f)
+        print(f"[💾] Saved checkpoint at ep {ep}")
 
-    # Eval run
-    if episode % 20 == 0:
-        eval_state = env.reset()
-        eval_done = False
-        eval_score = 0
-        action = 0
-        while not eval_done:
-            action = agent.select_action(eval_state, epsilon=0)
-            eval_state, reward, eval_done, _ = env.step(action)
-            eval_score += reward
-        eval_scores.append((episode, eval_score))
-        print(f"[Eval] Episode {episode}: Score = {eval_score}")
+# ───────────────────────────────────────────────────────────────────────────────
+# Plots
+plt.figure(figsize=(12,4))
+plt.subplot(1,2,1)
+plt.plot(episode_rewards); plt.title("Episode rewards"); plt.xlabel("Ep"); plt.ylabel("Reward")
 
-    # Save model
-    if episode % 100 == 0:
-        model.save(f"checkpoints/dqn_episode_{episode}.h5")
-        print(f"Model saved at episode {episode}")
+plt.subplot(1,2,2)
+plt.plot(episode_losses);  plt.title("Avg loss per episode"); plt.xlabel("Ep"); plt.ylabel("Loss")
+plt.tight_layout(); plt.show()
 
-# Plot performance
-plt.plot(episode_rewards)
-plt.title("Episode Reward Over Time")
-plt.xlabel("Episode")
-plt.ylabel("Reward")
-plt.show()
-
-plt.plot(episode_losses)
-plt.title("Average Training Loss Over Time")
-plt.xlabel("Episode")
-plt.ylabel("Loss")
-plt.show()
 env.close()
