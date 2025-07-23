@@ -15,13 +15,13 @@ from DQNAgent      import DQNAgent                # double-DQN + Huber
 # GPU setup
 gpus = tf.config.list_physical_devices('GPU')
 if gpus:
-    print(f"[✔] GPU detected: {gpus[0].name}")
+    print(f"GPU detected: {gpus[0].name}")
     try:
         tf.config.experimental.set_memory_growth(gpus[0], True)
     except RuntimeError as e:
         print(f"[!] GPU setup error: {e}")
 else:
-    print("[✘] No GPU detected → using CPU")
+    print("No GPU detected → using CPU")
 
 device = '/GPU:0' if gpus else '/CPU:0'
 Path("checkpoints").mkdir(exist_ok=True)
@@ -57,7 +57,7 @@ def load_latest_ckpt(model, target):
     if latest_ep:
         model.load_weights(f"checkpoints/{latest_file}")
         target.load_weights(f"checkpoints/{latest_file}")
-        print(f"[✔] Resumed from {latest_file}")
+        print(f"Resumed from {latest_file}")
     return latest_ep
 
 # ───────────────────────────────────────────────────────────────────────────────
@@ -81,9 +81,9 @@ start_ep    = load_latest_ckpt(model, target)
 if Path("checkpoints/replay_buffer.pkl").exists():
     with open("checkpoints/replay_buffer.pkl", "rb") as f:
         buffer = pickle.load(f)
-    print("[✔] Replay buffer loaded")
+    print("Replay buffer loaded")
 else:
-    print("[•] Warm-up: collecting expert transitions …")
+    print("Warm-up: collecting expert transitions …")
     while buffer.size() < buffer_warmup:
         s = env.reset(); done = False
         while not done and buffer.size() < buffer_warmup:
@@ -93,7 +93,7 @@ else:
             s = s2
     with open("checkpoints/replay_buffer.pkl","wb") as f:
         pickle.dump(buffer,f)
-    print(f"[✔] Warm-up complete ({buffer.size()} steps)")
+    print(f"Warm-up complete ({buffer.size()} steps)")
 
 # ───────────────────────────────────────────────────────────────────────────────
 # Training loop
@@ -161,7 +161,7 @@ for ep in range(start_ep+1, num_episodes+1):
         model.save(f"checkpoints/dqn_episode_{ep}.h5")
         with open("checkpoints/replay_buffer.pkl","wb") as f:
             pickle.dump(buffer,f)
-        print(f"[💾] Saved checkpoint at ep {ep}")
+        print(f"Saved checkpoint at ep {ep}")
 
 # ───────────────────────────────────────────────────────────────────────────────
 # Plots
